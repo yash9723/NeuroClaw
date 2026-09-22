@@ -1,0 +1,9 @@
+{
+  "appId": "com.neuroclaw.agent",
+  "appName": "NeuroClaw",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

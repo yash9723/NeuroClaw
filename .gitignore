@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+android/app/build/
+android/build/
+android/.gradle/
+.gradle/
+*.apk
+*.aab
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Environment Variables
+.env.local
+
+# IDE / System
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Android Studio / Local
+android/local.properties
+android/.idea/
+android/captures/
