@@ -71,14 +71,5 @@ The FastAPI backend runs on `http://localhost:8000`.
 6. **Speech Recognition:** Tap the microphone icon in the search bar and speak your task.
 7. **OpenClaw Action Trace:** Live JSON schemas displayed in real-time under the telemetry drawer.
 
----
 
-## 📁 Repository Structure
-- `.agents/rules/ponytail.md` - Active Ponytail YAGNI anti-bloat ruleset
-- `android/` - Full native Android Studio project and Gradle build files
-- `src/` - React mobile/desktop frontend with native hardware hooks
-- `skills/neuroclaw/SKILL.md` - OpenClaw skill definition
-- `skills/ponytail/SKILL.md` - Ponytail OpenClaw skill
-- `server/agent_api.py` - FastAPI agent server
-- `docs/SUBMISSION_PORTAL_CONTENT.md` - Ready-to-copy submission texts (due Sept 22)
-- `docs/PITCH_DECK.md` - Pitch presentation and technical architecture
+
