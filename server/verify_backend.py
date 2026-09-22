@@ -43,6 +43,7 @@ def main():
         ("OpenClaw LAM Task Plan", "/api/plan_task", "POST", {"goal": "order milk", "target_apps": ["Blinkit"]}),
         ("Desktop Git Action", "/api/desktop/action", "POST", {"action": "git_status"}),
         ("Desktop Terminal Command", "/api/desktop/command", "POST", {"command": "Get-Date"}),
+        ("Bluetooth Hardware Bridge", "/api/device/bluetooth/status", "GET", None),
     ]
 
     passed = 0

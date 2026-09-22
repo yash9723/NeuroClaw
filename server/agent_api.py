@@ -360,6 +360,79 @@ def pair_wireless(req: WirelessPairRequest):
         "output": res
     }
 
+# --- Bluetooth Connectivity & Pairing Bridge ---
+
+@app.get("/api/device/bluetooth/status")
+def get_bluetooth_status():
+    """Query Bluetooth state across PC and connected Android hardware."""
+    pc_bt = False
+    try:
+        res = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", "Get-PnpDevice -Class Bluetooth | Where-Object FriendlyName -like '*Intel*' | Select-Object -ExpandProperty Status"],
+            capture_output=True, text=True, timeout=3
+        )
+        pc_bt = "OK" in res.stdout
+    except Exception:
+        pass
+
+    phone_bt = False
+    phone_name = "POCO X5 5G"
+    phone_mac = "E4:BC:AA:9D:D6:BF"
+    paired = False
+
+    try:
+        bt_dump = run_adb(["shell", "dumpsys", "bluetooth_manager"], timeout=3)
+        if "state: ON" in bt_dump or "enabled: true" in bt_dump:
+            phone_bt = True
+        for line in bt_dump.splitlines():
+            line = line.strip()
+            if line.startswith("name:") and len(line.split()) > 1:
+                phone_name = line.split(":", 1)[1].strip()
+            elif line.startswith("Address:") and len(line.split()) > 1:
+                phone_mac = line.split(":", 1)[1].strip()
+
+        # Check if phone is in Windows Bluetooth paired list
+        check_pair = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", f"Get-PnpDevice -Class Bluetooth | Where-Object FriendlyName -like '*{phone_name}*' | Select-Object -ExpandProperty Status"],
+            capture_output=True, text=True, timeout=3
+        )
+        paired = "OK" in check_pair.stdout
+    except Exception:
+        pass
+
+    return {
+        "pc_bluetooth_ready": pc_bt,
+        "phone_bluetooth_on": phone_bt,
+        "phone_name": phone_name,
+        "phone_address": phone_mac,
+        "is_paired": paired,
+        "pan_adapter": "Bluetooth Device (Personal Area Network)",
+        "timestamp": time.time()
+    }
+
+@app.post("/api/device/bluetooth/pair")
+def trigger_bluetooth_pair():
+    """Trigger discoverable mode on phone and launch Windows Bluetooth pairing wizard."""
+    run_adb(["shell", "am", "start", "-a", "android.bluetooth.adapter.action.REQUEST_DISCOVERABLE", "--ei", "android.bluetooth.adapter.extra.DISCOVERABLE_DURATION", "300"], timeout=3)
+    try:
+        subprocess.Popen(["DevicePairingWizard.exe"], shell=False)
+    except Exception:
+        subprocess.Popen(["cmd.exe", "/c", "start", "ms-settings:bluetooth"], shell=False)
+
+    return {
+        "success": True,
+        "message": "Phone set to Bluetooth Discoverable for 300s. Windows Pairing Wizard opened."
+    }
+
+@app.post("/api/device/bluetooth/tether")
+def trigger_bluetooth_tether():
+    """Open Tethering screen on phone to enable Bluetooth PAN networking."""
+    run_adb(["shell", "am", "start", "-a", "android.settings.TETHER_SETTINGS"], timeout=3)
+    return {
+        "success": True,
+        "message": "Tethering screen opened on phone. Toggle Bluetooth tethering ON to connect PAN link."
+    }
+
 @app.get("/api/device/screencap")
 def get_device_screencap():
     try:

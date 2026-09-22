@@ -6,7 +6,7 @@ import { apiUrl } from '../services/bridge';
 
 export default function DeviceBridgeCard({ mirrorMode, setMirrorMode, onRefreshMirror }) {
   const [device, setDevice] = useState({
-    connected: true, serial: '90af15c70000', model: 'Redmi Note (Snapdragon NPU)',
+    connected: true, serial: '90af15c70000', model: 'POCO X5 (Snapdragon NPU)',
     battery_level: 88, temperature_c: 36.0, connection_type: 'usb', link_speed: 'USB 3.0 (0.8ms)'
   });
   const [loading, setLoading] = useState(false);
@@ -29,9 +29,7 @@ export default function DeviceBridgeCard({ mirrorMode, setMirrorMode, onRefreshM
     setLoading(true);
     triggerHaptic('click');
     try {
-      await fetch(apiUrl('/api/device/action'), {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action })
-      });
+      await fetch(apiUrl('/api/device/action'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
       if (onRefreshMirror) onRefreshMirror();
       await fetchStatus();
     } catch (_) {}
@@ -48,11 +46,10 @@ export default function DeviceBridgeCard({ mirrorMode, setMirrorMode, onRefreshM
             <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isWifi ? 'bg-neuro-neon' : 'bg-emerald-400'}`}></span>
             <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isWifi ? 'bg-neuro-neon' : 'bg-emerald-500'}`}></span>
           </span>
-          <span className="font-bold text-white uppercase text-[11px] tracking-wide flex items-center gap-1.5">
-            <span>{isWifi ? 'Wireless Device Link' : 'ADB Hardware Link'}</span>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${isWifi ? 'bg-cyan-500/20 text-neuro-neon border border-cyan-500/40' : 'bg-emerald-500/20 text-emerald-300'}`}>
-              {isWifi ? '📶 WiFi 5GHz' : '🔌 USB 3.0'}
-            </span>
+          <span className="font-bold text-white uppercase text-[11px] tracking-wide flex items-center gap-1">
+            <span>{isWifi ? 'Wireless Link' : 'Hardware Link'}</span>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${isWifi ? 'bg-cyan-500/20 text-neuro-neon border border-cyan-500/40' : 'bg-emerald-500/20 text-emerald-300'}`}>{isWifi ? '📶 WiFi' : '🔌 USB'}</span>
+            <span className="text-[9px] px-1 py-0.5 rounded font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">⚡ BT</span>
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -82,7 +79,7 @@ export default function DeviceBridgeCard({ mirrorMode, setMirrorMode, onRefreshM
           className="flex-1 bg-neuro-neon/10 hover:bg-neuro-neon/20 border border-neuro-neon/40 py-1 px-2 rounded-lg text-neuro-neon text-[10px] font-sans font-bold flex items-center justify-center gap-1 transition-all"
         >
           <Wifi className="w-3 h-3 text-neuro-neon" />
-          <span>{isWifi ? 'Wireless Connected' : 'Go Wireless'}</span>
+          <span>{isWifi ? 'Wireless / BT Link' : 'Wireless / BT'}</span>
         </button>
         <button
           onClick={() => sendAction('wake')}
