@@ -8,9 +8,6 @@
 
 ### 1. Run the Web & Mobile Development Server
 ```bash
-# Navigate to project directory
-cd C:\Users\yashr\.gemini\antigravity\scratch\iqoo-neuroclaw
-
 # Start Vite server (configured for 0.0.0.0 network host)
 npm run dev
 ```
