@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("NeuroClaw")
 
 import asyncio
+import threading
 from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -22,6 +23,27 @@ from server import desktop_controller as desktop_ctl
 
 active_ws_clients: set = set()
 main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+_latest_screencap = {"data": None, "time": 0.0}
+_screencap_lock = threading.Lock()
+_screencap_active_until = 0.0
+
+def background_screencap_worker():
+    global _latest_screencap, _screencap_active_until
+    while True:
+        try:
+            now = time.time()
+            if now < _screencap_active_until:
+                serial = get_active_device_serial()
+                if serial:
+                    cmd = [ADB_PATH, "-s", serial, "exec-out", "screencap", "-p"]
+                    res = subprocess.run(cmd, capture_output=True, timeout=3)
+                    if res.returncode == 0 and len(res.stdout) > 1000:
+                        with _screencap_lock:
+                            _latest_screencap = {"data": res.stdout, "time": time.time()}
+            time.sleep(0.4)
+        except Exception:
+            time.sleep(1.0)
 
 async def broadcast_ws(event: dict):
     if not active_ws_clients:
