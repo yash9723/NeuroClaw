@@ -98,18 +98,25 @@ def get_host_ip() -> str:
         pass
     return "127.0.0.1"
 
+_cached_serial = (0.0, None)
+
 def get_active_device_serial() -> Optional[str]:
-    """Return the serial of the primary active device (handles multiple devices safely)."""
+    """Return the serial of the primary active device with a short 2s cache."""
+    global _cached_serial
+    now = time.time()
+    if now - _cached_serial[0] < 2.0:
+        return _cached_serial[1]
+    serial = None
     try:
-        res = subprocess.run([ADB_PATH, "devices"], capture_output=True, text=True, timeout=3)
+        res = subprocess.run([ADB_PATH, "devices"], capture_output=True, text=True, timeout=1.5)
         lines = [l.strip() for l in res.stdout.splitlines() if "\tdevice" in l]
         if lines:
-            # Prefer USB serial (no colon) if available, else first device
             usb_lines = [l for l in lines if ":" not in l.split("\t")[0]]
-            return (usb_lines[0] if usb_lines else lines[0]).split("\t")[0]
+            serial = (usb_lines[0] if usb_lines else lines[0]).split("\t")[0]
     except Exception:
         pass
-    return None
+    _cached_serial = (now, serial)
+    return serial
 
 def run_adb(args: List[str], timeout: int = 5) -> str:
     """Execute ADB command safely, injecting device serial if multiple devices are attached."""
@@ -120,6 +127,8 @@ def run_adb(args: List[str], timeout: int = 5) -> str:
             serial = get_active_device_serial()
             if serial:
                 cmd.extend(["-s", serial])
+            else:
+                return ""
         cmd.extend(args)
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return res.stdout.strip()
@@ -128,22 +137,23 @@ def run_adb(args: List[str], timeout: int = 5) -> str:
 
 
 def detect_device_wifi_ip() -> Optional[str]:
-    # Check if a wireless device is already listed in adb devices
-    devs = run_adb(["devices"])
-    for line in devs.splitlines():
-        if ":5555" in line and "\tdevice" in line:
-            return line.split("\t")[0].split(":")[0]
-    
+    # Check if an active device is connected
+    serial = get_active_device_serial()
+    if not serial:
+        return None
+    if ":5555" in serial or (":" in serial and not serial.startswith("emulator")):
+        return serial.split(":")[0]
+
     # Try querying connected device's wlan0 IP
-    out = run_adb(["shell", "ip", "-4", "addr", "show", "wlan0"])
+    out = run_adb(["shell", "ip", "-4", "addr", "show", "wlan0"], timeout=1.5)
     for line in out.splitlines():
         line = line.strip()
         if line.startswith("inet "):
             ip = line.split()[1].split("/")[0]
             if ip and not ip.startswith("127."):
                 return ip
-    
-    prop_ip = run_adb(["shell", "getprop", "dhcp.wlan0.ipaddress"])
+
+    prop_ip = run_adb(["shell", "getprop", "dhcp.wlan0.ipaddress"], timeout=1.5)
     if prop_ip and "." in prop_ip:
         return prop_ip.strip()
     return None

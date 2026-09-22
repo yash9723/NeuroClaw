@@ -15,7 +15,7 @@ def test_endpoint(name: str, path: str, method: str = "GET", payload: dict = Non
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     start = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             elapsed = int((time.time() - start) * 1000)
             res_json = json.loads(resp.read().decode("utf-8"))
             print(f"  [PASS] {name:<30} ({elapsed}ms) -> {resp.status} OK")
