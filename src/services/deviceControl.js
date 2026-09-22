@@ -55,3 +55,8 @@ export async function sendAction(action) {
   });
   return await res.json();
 }
+
+export async function launchDesktopMirror() {
+  const res = await fetch(apiUrl('/api/device/mirror/launch_desktop'), { method: 'POST' });
+  return await res.json();
+}

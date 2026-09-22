@@ -47,6 +47,7 @@ def main():
         ("Display Metrics & Resolution", "/api/device/display", "GET", None),
         ("Device Key Control", "/api/device/control/key", "POST", {"key": "wake"}),
         ("Device Tap Control", "/api/device/control/tap", "POST", {"pct_x": 0.5, "pct_y": 0.5}),
+        ("Desktop 60 FPS Mirror Launcher", "/api/device/mirror/launch_desktop", "POST", None),
     ]
 
     passed = 0

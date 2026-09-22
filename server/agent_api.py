@@ -81,6 +81,7 @@ async def startup_event():
     global main_loop
     main_loop = asyncio.get_running_loop()
     logger.info("FastAPI main event loop captured for threadsafe WebSocket broadcasting.")
+    threading.Thread(target=background_screencap_worker, daemon=True).start()
 
 app.add_middleware(
     CORSMiddleware,
@@ -474,19 +475,62 @@ def trigger_bluetooth_tether():
         "message": "Tethering screen opened on phone. Toggle Bluetooth tethering ON to connect PAN link."
     }
 
+def find_scrcpy_binary() -> Optional[str]:
+    p = shutil.which("scrcpy")
+    if p:
+        return p
+    winget_root = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages")
+    if os.path.exists(winget_root):
+        for root, dirs, files in os.walk(winget_root):
+            if "scrcpy.exe" in files:
+                return os.path.join(root, "scrcpy.exe")
+    return None
+
+@app.post("/api/device/mirror/launch_desktop")
+def launch_desktop_mirror():
+    scrcpy_bin = find_scrcpy_binary()
+    if not scrcpy_bin:
+        return {"success": False, "message": "scrcpy not found"}
+    serial = get_active_device_serial()
+    cmd = [
+        scrcpy_bin,
+        "--max-fps=60",
+        "-b", "16M",
+        "--stay-awake",
+        "--video-codec=h264",
+        "--video-encoder=c2.android.avc.encoder",
+        "--max-size=1080",
+        "--window-title", "NeuroClaw Phone Mirror (Locked 60 FPS)"
+    ]
+    if serial:
+        cmd.extend(["-s", serial])
+    subprocess.Popen(cmd)
+    return {"success": True, "fps": 60, "message": "Native 60 FPS hardware mirror window launched!"}
+
 @app.get("/api/device/screencap")
-def get_device_screencap():
+def get_device_screencap(fresh: int = 0):
+    global _screencap_active_until
+    _screencap_active_until = time.time() + 20.0
+    now = time.time()
+    with _screencap_lock:
+        if not fresh and _latest_screencap["data"] and (now - _latest_screencap["time"] < 1.0):
+            return Response(content=_latest_screencap["data"], media_type="image/png")
     try:
         serial = get_active_device_serial()
         cmd = [ADB_PATH]
         if serial:
             cmd.extend(["-s", serial])
         cmd.extend(["exec-out", "screencap", "-p"])
-        res = subprocess.run(cmd, capture_output=True, timeout=6)
+        res = subprocess.run(cmd, capture_output=True, timeout=5)
         if res.returncode == 0 and len(res.stdout) > 1000:
+            with _screencap_lock:
+                _latest_screencap = {"data": res.stdout, "time": time.time()}
             return Response(content=res.stdout, media_type="image/png")
     except Exception:
         pass
+    with _screencap_lock:
+        if _latest_screencap["data"]:
+            return Response(content=_latest_screencap["data"], media_type="image/png")
     raise HTTPException(status_code=503, detail="Screen capture unavailable")
 
 _cached_display = (0.0, {"width": 1080, "height": 2400, "density": 440, "orientation": 0})
