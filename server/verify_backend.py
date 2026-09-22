@@ -44,6 +44,9 @@ def main():
         ("Desktop Git Action", "/api/desktop/action", "POST", {"action": "git_status"}),
         ("Desktop Terminal Command", "/api/desktop/command", "POST", {"command": "Get-Date"}),
         ("Bluetooth Hardware Bridge", "/api/device/bluetooth/status", "GET", None),
+        ("Display Metrics & Resolution", "/api/device/display", "GET", None),
+        ("Device Key Control", "/api/device/control/key", "POST", {"key": "wake"}),
+        ("Device Tap Control", "/api/device/control/tap", "POST", {"pct_x": 0.5, "pct_y": 0.5}),
     ]
 
     passed = 0

@@ -177,6 +177,25 @@ class WirelessPairRequest(BaseModel):
     port: int
     code: str
 
+class ControlTapRequest(BaseModel):
+    x: Optional[int] = None
+    y: Optional[int] = None
+    pct_x: Optional[float] = None
+    pct_y: Optional[float] = None
+
+class ControlSwipeRequest(BaseModel):
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    duration_ms: int = 300
+
+class ControlKeyRequest(BaseModel):
+    key: str
+
+class ControlTextRequest(BaseModel):
+    text: str
+
 @app.get("/")
 @app.get("/api/health")
 def health_check():
@@ -448,23 +467,102 @@ def get_device_screencap():
         pass
     raise HTTPException(status_code=503, detail="Screen capture unavailable")
 
+_cached_display = (0.0, {"width": 1080, "height": 2400, "density": 440, "orientation": 0})
+
+def get_device_display_info() -> dict:
+    global _cached_display
+    now = time.time()
+    if now - _cached_display[0] < 10.0:
+        return _cached_display[1]
+    w, h, density = 1080, 2400, 440
+    try:
+        out = run_adb(["shell", "wm", "size"], timeout=2)
+        if "Physical size:" in out:
+            size_str = out.split("Physical size:")[-1].strip().split()[0]
+            parts = size_str.split("x")
+            w, h = int(parts[0]), int(parts[1])
+        density_out = run_adb(["shell", "wm", "density"], timeout=2)
+        if "Physical density:" in density_out:
+            density = int(density_out.split("Physical density:")[-1].strip().split()[0])
+    except Exception:
+        pass
+    info = {"width": w, "height": h, "density": density, "orientation": 0}
+    _cached_display = (now, info)
+    return info
+
+@app.get("/api/device/display")
+def get_device_display():
+    return get_device_display_info()
+
+@app.post("/api/device/control/tap")
+async def device_control_tap(req: ControlTapRequest):
+    display = get_device_display_info()
+    if req.pct_x is not None and req.pct_y is not None:
+        real_x = int(req.pct_x * display["width"])
+        real_y = int(req.pct_y * display["height"])
+    else:
+        real_x = req.x if req.x is not None else int(display["width"] / 2)
+        real_y = req.y if req.y is not None else int(display["height"] / 2)
+    run_adb(["shell", "input", "tap", str(real_x), str(real_y)], timeout=2)
+    event = {"type": "device_touch", "action": "tap", "x": real_x, "y": real_y}
+    await broadcast_ws(event)
+    return {"status": "ok", "x": real_x, "y": real_y}
+
+@app.post("/api/device/control/swipe")
+async def device_control_swipe(req: ControlSwipeRequest):
+    duration = max(50, min(req.duration_ms, 2000))
+    run_adb(["shell", "input", "swipe", str(req.x1), str(req.y1), str(req.x2), str(req.y2), str(duration)], timeout=3)
+    event = {"type": "device_touch", "action": "swipe", "x1": req.x1, "y1": req.y1, "x2": req.x2, "y2": req.y2}
+    await broadcast_ws(event)
+    return {"status": "ok", "x1": req.x1, "y1": req.y1, "x2": req.x2, "y2": req.y2}
+
+@app.post("/api/device/control/key")
+def device_control_key(req: ControlKeyRequest):
+    key_map = {
+        "back": "4",
+        "home": "3",
+        "recents": "187",
+        "app_switch": "187",
+        "power": "26",
+        "wake": "224",
+        "volume_up": "24",
+        "volume_down": "25",
+        "enter": "66",
+        "del": "67",
+        "backspace": "67",
+        "tab": "61",
+        "escape": "111"
+    }
+    key_code = key_map.get(req.key.lower(), req.key)
+    run_adb(["shell", "input", "keyevent", str(key_code)], timeout=2)
+    return {"status": "ok", "key": req.key, "key_code": key_code}
+
+@app.post("/api/device/control/text")
+def device_control_text(req: ControlTextRequest):
+    safe_text = req.text.replace(" ", "%s").replace("&", "\\&").replace(";", "\\;")
+    run_adb(["shell", "input", "text", safe_text], timeout=3)
+    return {"status": "ok", "text": req.text}
+
 @app.post("/api/device/action")
 def send_device_action(req: ActionRequest):
-    if req.action == "wake":
-        run_adb(["shell", "input", "keyevent", "224"])
-        return {"status": "ok", "action": "woken"}
-    elif req.action == "launch_app":
-        run_adb(["shell", "monkey", "-p", "com.neuroclaw.agent", "-c", "android.intent.category.LAUNCHER", "1"])
-        return {"status": "ok", "action": "app_launched"}
-    elif req.action == "home":
-        run_adb(["shell", "input", "keyevent", "3"])
-        return {"status": "ok", "action": "home_pressed"}
-    elif req.action == "back":
-        run_adb(["shell", "input", "keyevent", "4"])
-        return {"status": "ok", "action": "back_pressed"}
-    elif req.action == "wifi_settings":
-        run_adb(["shell", "am", "start", "-a", "android.settings.WIFI_SETTINGS"])
-        return {"status": "ok", "action": "opened_wifi_settings"}
+    action_map = {
+        "wake": ["shell", "input", "keyevent", "224"],
+        "launch_app": ["shell", "monkey", "-p", "com.neuroclaw.agent", "-c", "android.intent.category.LAUNCHER", "1"],
+        "home": ["shell", "input", "keyevent", "3"],
+        "back": ["shell", "input", "keyevent", "4"],
+        "recents": ["shell", "input", "keyevent", "187"],
+        "power": ["shell", "input", "keyevent", "26"],
+        "volume_up": ["shell", "input", "keyevent", "24"],
+        "volume_down": ["shell", "input", "keyevent", "25"],
+        "wifi_settings": ["shell", "am", "start", "-a", "android.settings.WIFI_SETTINGS"],
+        "settings": ["shell", "am", "start", "-a", "android.settings.SETTINGS"],
+        "camera": ["shell", "am", "start", "-a", "android.media.action.IMAGE_CAPTURE"],
+        "browser": ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", "https://google.com"]
+    }
+    cmd_args = action_map.get(req.action)
+    if cmd_args:
+        run_adb(cmd_args, timeout=3)
+        return {"status": "ok", "action": req.action}
     return {"status": "ignored"}
 
 @app.post("/api/plan_task")

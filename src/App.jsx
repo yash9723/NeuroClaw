@@ -10,12 +10,14 @@ import PhysicalScreenMirror from './components/PhysicalScreenMirror';
 import DesktopCommandBanner from './components/DesktopCommandBanner';
 import OpenClawPanel from './components/OpenClawPanel';
 import DesktopRemoteCard from './components/DesktopRemoteCard';
+import ScreenMirrorStudio from './components/ScreenMirrorStudio';
 import { SCENARIOS, planWithOpenClaw } from './services/agentSimulator';
 import { triggerHaptic } from './services/haptics';
 import { apiUrl } from './services/bridge';
 import { subscribeRealtime, sendRealtime } from './services/realtime';
 
 export default function App() {
+  const [activePage, setActivePage] = useState('dashboard'); // 'dashboard' | 'mirror'
   const [monsterMode, setMonsterMode] = useState(true);
   const [deviceView, setDeviceView] = useState('desktop'); // 'mobile' | 'desktop'
   const [mirrorMode, setMirrorMode] = useState('perception'); // 'perception' | 'physical'
@@ -245,12 +247,15 @@ export default function App() {
         batteryLevel={batteryLevel}
         isCharging={isCharging}
         temperature={temperature}
+        activePage={activePage}
+        setActivePage={setActivePage}
       />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 flex items-center justify-center pb-[calc(env(safe-area-inset-bottom,0px)+6rem)]">
-        {/* Desktop Command Center View */}
-        {!isMobileScreen && deviceView === 'desktop' ? (
+        {activePage === 'mirror' ? (
+          <ScreenMirrorStudio />
+        ) : !isMobileScreen && deviceView === 'desktop' ? (
           <div className="w-full space-y-4">
             <DesktopCommandBanner />
 
@@ -261,6 +266,7 @@ export default function App() {
                   mirrorMode={mirrorMode}
                   setMirrorMode={setMirrorMode}
                   onRefreshMirror={() => setRefreshKey(Date.now())}
+                  onOpenMirrorStudio={() => setActivePage('mirror')}
                 />
                 {mirrorMode === 'perception' ? (
                   <LiveScreenPerception

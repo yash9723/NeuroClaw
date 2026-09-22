@@ -26,6 +26,10 @@
   border: 1px solid rgba(31, 41, 61, 0.8);
 }
 
+.ctrl-btn {
+  @apply flex flex-col items-center justify-center gap-1 py-1.5 px-2 rounded-xl bg-black/60 border border-neuro-border hover:border-neuro-neon hover:bg-neuro-card/80 transition-all text-gray-300 active:scale-95;
+}
+
 /* Scan line animation for Biometric Face Verification */
 @keyframes scanline {
   0% { transform: translateY(0%); }

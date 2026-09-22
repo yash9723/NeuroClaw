@@ -4,7 +4,7 @@ import { triggerHaptic } from '../services/haptics';
 import WirelessConnectModal from './WirelessConnectModal';
 import { apiUrl } from '../services/bridge';
 
-export default function DeviceBridgeCard({ mirrorMode, setMirrorMode, onRefreshMirror }) {
+export default function DeviceBridgeCard({ mirrorMode, setMirrorMode, onRefreshMirror, onOpenMirrorStudio }) {
   const [device, setDevice] = useState({
     connected: true, serial: '90af15c70000', model: 'POCO X5 (Snapdragon NPU)',
     battery_level: 88, temperature_c: 36.0, connection_type: 'usb', link_speed: 'USB 3.0 (0.8ms)'
@@ -54,7 +54,7 @@ export default function DeviceBridgeCard({ mirrorMode, setMirrorMode, onRefreshM
         </div>
         <div className="flex items-center gap-1">
           <button onClick={() => { setMirrorMode('perception'); triggerHaptic('click'); }} className={`px-2 py-0.5 rounded text-[10px] font-sans font-semibold ${mirrorMode === 'perception' ? 'bg-neuro-neon text-black' : 'text-gray-400 hover:text-white'}`}>Perception</button>
-          <button onClick={() => { setMirrorMode('physical'); triggerHaptic('click'); }} className={`px-2 py-0.5 rounded text-[10px] font-sans font-semibold ${mirrorMode === 'physical' ? 'bg-neuro-orange text-black' : 'text-gray-400 hover:text-white'}`}>Mirror</button>
+          <button onClick={() => { if (onOpenMirrorStudio) onOpenMirrorStudio(); else setMirrorMode('physical'); triggerHaptic('click'); }} className="px-2 py-0.5 rounded text-[10px] font-sans font-semibold bg-cyan-400 text-black hover:bg-cyan-300">Studio ↗</button>
         </div>
       </div>
 
