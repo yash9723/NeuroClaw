@@ -7,6 +7,7 @@
     "dev": "vite --host",
     "server": "python server/start_server.py",
     "verify:backend": "python server/verify_backend.py",
+    "test:realtime": "python server/test_openclaw_realtime.py",
     "build": "vite build",
     "build:apk": "vite build && npx cap copy android && cd android && gradlew.bat assembleDebug",
     "preview": "vite preview"

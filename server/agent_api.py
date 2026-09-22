@@ -13,17 +13,52 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("NeuroClaw")
 
-from fastapi import FastAPI, HTTPException, Response
+import asyncio
+from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from server import openclaw_engine as oclaw
 from server import desktop_controller as desktop_ctl
+
+active_ws_clients: set = set()
+main_loop: Optional[asyncio.AbstractEventLoop] = None
+
+async def broadcast_ws(event: dict):
+    if not active_ws_clients:
+        return
+    dead = []
+    for ws in list(active_ws_clients):
+        try:
+            await ws.send_json(event)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        active_ws_clients.discard(ws)
+
+def broadcast_sync(event: dict):
+    global main_loop
+    if not active_ws_clients:
+        return
+    try:
+        if main_loop and main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(broadcast_ws(event), main_loop)
+        else:
+            loop = asyncio.get_running_loop()
+            loop.create_task(broadcast_ws(event))
+    except Exception as e:
+        logger.debug(f"broadcast_sync error: {e}")
 
 app = FastAPI(
     title="NeuroClaw OpenClaw Gateway API",
     description="Agentic Task Automation & On-Device NPU Wireless Execution Bridge",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+    logger.info("FastAPI main event loop captured for threadsafe WebSocket broadcasting.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -169,12 +204,41 @@ sync_state = {
 def get_sync_state():
     return sync_state
 
-@app.post("/api/sync/update")
-def update_sync_state(payload: dict):
+def apply_sync_update(payload: dict) -> dict:
     global sync_state
     sync_state.update(payload)
     sync_state["last_updated"] = time.time()
-    return {"status": "ok", "state": sync_state}
+    broadcast_sync({"type": "sync_state", "data": sync_state})
+    return sync_state
+
+@app.post("/api/sync/update")
+async def update_sync_state_endpoint(payload: dict):
+    state = apply_sync_update(payload)
+    return {"status": "ok", "state": state}
+
+@app.websocket("/api/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_ws_clients.add(websocket)
+    try:
+        await websocket.send_json({
+            "type": "init",
+            "sync_state": sync_state,
+            "tool_trace": oclaw.get_trace()[-10:],
+            "host_ip": get_host_ip()
+        })
+        while True:
+            data = await websocket.receive_json()
+            mtype = data.get("type")
+            if mtype == "sync_update":
+                sync_state.update(data.get("payload", {}))
+                sync_state["last_updated"] = time.time()
+                await broadcast_ws({"type": "sync_state", "data": sync_state})
+            elif mtype == "execute_tool":
+                res = oclaw.execute_tool(data.get("tool"), data.get("params", {}), run_adb)
+                await broadcast_ws({"type": "tool_call", "data": res})
+    except (WebSocketDisconnect, Exception):
+        active_ws_clients.discard(websocket)
 
 @app.get("/api/device/status")
 def get_device_status():
@@ -340,9 +404,10 @@ class ToolCallRequest(BaseModel):
 
 
 @app.post("/api/openclaw/execute_step")
-def openclaw_execute_step(req: ToolCallRequest):
+async def openclaw_execute_step(req: ToolCallRequest):
     """Execute one OpenClaw tool call — real ADB or gate trigger."""
     result = oclaw.execute_tool(req.tool, req.params, run_adb)
+    await broadcast_ws({"type": "tool_call", "data": result})
     return result
 
 
@@ -353,8 +418,9 @@ def openclaw_tool_trace():
 
 
 @app.delete("/api/openclaw/tool_trace")
-def openclaw_clear_trace():
+async def openclaw_clear_trace():
     oclaw.clear_trace()
+    await broadcast_ws({"type": "tool_trace_cleared"})
     return {"status": "cleared"}
 
 
@@ -398,7 +464,7 @@ def trigger_desktop_action(req: DesktopActionReq):
         "status": res.get("status", "ok"),
         "output": res
     })
-    update_sync_state({
+    apply_sync_update({
         "last_remote_command": f"Desktop: {req.action}",
         "last_remote_ts": time.time()
     })
@@ -415,7 +481,7 @@ def trigger_desktop_command(req: DesktopCommandReq):
         "status": res.get("status", "ok"),
         "output": res
     })
-    update_sync_state({
+    apply_sync_update({
         "last_remote_command": f"CMD: {req.command[:30]}",
         "last_remote_ts": time.time()
     })
@@ -447,7 +513,7 @@ def execute_desktop_openclaw(req: DesktopOpenClawReq):
         "status": res.get("status", "ok"),
         "output": res
     })
-    update_sync_state({
+    apply_sync_update({
         "last_remote_command": f"OpenClaw: {req.goal[:30]}",
         "last_remote_ts": time.time()
     })

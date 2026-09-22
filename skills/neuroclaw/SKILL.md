@@ -34,3 +34,11 @@ This skill equips the OpenClaw gateway with tools to perceive, plan, and execute
 - **Description:** Sets device thermal and NPU execution mode.
 - **Parameters:**
   - `profile` (string): `MONSTER_PERFORMANCE` | `ECO_BATTERY_SAVER`
+
+### `desktop_action`
+- **Description:** Dispatches native workstation OS tasks and PowerShell execution payloads.
+- **Parameters:**
+  - `action` (string): `git_status` | `lock_pc` | `launch_vscode` | `open_browser` | `powershell`
+  - `command` (string, optional): PowerShell command to execute when action is `powershell`.
+- **Returns:** Structured command output, execution latency, and return status code.
+

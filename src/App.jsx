@@ -13,6 +13,7 @@ import DesktopRemoteCard from './components/DesktopRemoteCard';
 import { SCENARIOS, planWithOpenClaw } from './services/agentSimulator';
 import { triggerHaptic } from './services/haptics';
 import { apiUrl } from './services/bridge';
+import { subscribeRealtime, sendRealtime } from './services/realtime';
 
 export default function App() {
   const [monsterMode, setMonsterMode] = useState(true);
@@ -74,8 +75,9 @@ export default function App() {
     setLogs((prev) => [{ time, type, message }, ...prev.slice(0, 40)]);
   };
 
-  // Push state to LAN sync server
+  // Push state to LAN sync server & WebSocket bus
   const pushSync = (data) => {
+    sendRealtime('sync_update', data);
     fetch(apiUrl('/api/sync/update'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -86,6 +88,7 @@ export default function App() {
   // Fire real OpenClaw tool call (logged in /api/openclaw/tool_trace)
   const pushToolCall = (step) => {
     if (!step?._tool) return;
+    sendRealtime('execute_tool', { tool: step._tool, params: step._params || {} });
     fetch(apiUrl('/api/openclaw/execute_step'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,21 +96,36 @@ export default function App() {
     }).catch(() => {});
   };
 
-  // Real-time Wireless LAN Sync Listener
+  // Real-time Wireless LAN Sync via WebSocket bus (with fallback heartbeat)
   useEffect(() => {
+    const handleRemoteSync = (remote) => {
+      if (!remote) return;
+      if (remote.is_auth_open && !isAuthModalOpen) {
+        setIsAuthModalOpen(true);
+      } else if (!remote.is_auth_open && isAuthModalOpen && remote.auth_passed) {
+        setIsAuthModalOpen(false);
+      }
+    };
+
+    const unsubscribe = subscribeRealtime((msg) => {
+      if (msg.type === 'init' && msg.sync_state) {
+        handleRemoteSync(msg.sync_state);
+      } else if (msg.type === 'sync_state' && msg.data) {
+        handleRemoteSync(msg.data);
+      }
+    });
+
     const interval = setInterval(async () => {
       try {
         const res = await fetch(apiUrl('/api/sync/state'));
-        if (!res.ok) return;
-        const remote = await res.json();
-        if (remote.is_auth_open && !isAuthModalOpen) {
-          setIsAuthModalOpen(true);
-        } else if (!remote.is_auth_open && isAuthModalOpen && remote.auth_passed) {
-          setIsAuthModalOpen(false);
-        }
+        if (res.ok) handleRemoteSync(await res.json());
       } catch (_) {}
-    }, 900);
-    return () => clearInterval(interval);
+    }, 1800);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [isAuthModalOpen]);
 
   // Start Autonomous Task Execution
